@@ -1,0 +1,65 @@
+---
+title: "Filtering CPC2 and Pfam output for antisense lncRNAs"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r,message=FALSE}
+# Create two tables with CPC2 non-coding and CPC2 coding labels
+
+anti <- read_delim("path/to/antisense_gffcompare_txIDs_CPC2output.txt", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)
+
+colnames(cs_anti)[1] = "ID"
+
+anti %>%
+  dplyr::filter(transcript_length >= 200,label == 'coding') %>%
+  dplyr::filter(str_detect(ID,'MSTRG')) -> anti_cod
+
+anti %>%
+  dplyr::filter(transcript_length >= 200,label == 'noncoding') %>%
+  dplyr::filter(str_detect(ID,'MSTRG')) -> anti_noncod
+
+```
+
+```{r, message=FALSE}
+#Lets read in the Pfam output
+pfam <- read_csv("/path/to/*.transdecoder_dir/pfam_antisense.txt", 
+    col_names = FALSE)
+
+#generate a file where the column is labeled "ID" and contains the transcript ID of the pfam hits
+```
+
+```{r}
+#HC lncRNAs -> CPC2 noncoding && have no hits in the Pfam database
+hc_anti <- anti_join(anti_noncod, cs_pfam, by = c("ID" = "ID"))%>% 
+          distinct()%>%
+          na.omit()
+
+hc_anti_txIDs <- hc_anti$ID %>% as.data.frame() 
+colnames(hc_anti_txIDs)[1] = "ID"
+
+#write_delim(hc_anti_txIDs, /path/to/desired/destiantion/hc_anti_txIDs.txt")
+
+#LC lncRNAs -> 1) transcripts that are CPC2 coding && have no hits in the Pfam database or 2) are transcripts that are CPC2 non-coding and have hits in the Pfam database
+lc_anti_1 <- anti_join(anti_cod, pfam, by =c("ID" = "ID"))%>% 
+          distinct()%>%
+          na.omit()
+
+lc_anti_2 <- right_join(anti_noncod, pfam,
+          by = c("ID" = "ID")) %>% 
+          distinct()%>%
+          na.omit()
+
+
+lc_anti <- rbind(c_anti_1, lc_anti_2)
+
+lc_anti_txIDs <- lc_anti$ID %>% as.data.frame() 
+colnames(lc_anti_txIDs)[1] = "ID"
+
+#write_delim(lc_anti_txIDs,  /path/to/desired/destiantion/lc_anti_txIDs.txt")
+```
