@@ -1,0 +1,120 @@
+---
+title: "Antisense filtering"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+```
+
+#Now lets try to do this with C.sat
+```{r}
+#This should be the directory in which the gffcompare output files are stored
+setwd("/desired/path/to/output/gffcompare_results")
+```
+
+#Read in your gffcompare tmap file
+```{r}
+gffcomp <- read_delim("/desired/path/to/output/gffcompare_results/*.tmap", 
+                 delim = "\t", escape_double = FALSE, 
+                 trim_ws = TRUE)
+```
+
+#Now lets filter for antisense RNAs and save those transcripts - by changing the class code character you can filter for diffrent types of genomic elements. Here, we are focused on antisense transcripts so that is class code "x"
+```{r}
+antisense <- gffcomp %>% 
+  dplyr::filter(class_code == "x" & len >= 200) # filter for antisense lncRNAs
+
+antisense %>% 
+  distinct(qry_id) %>% 
+  write.table(., "/desired/path/to/output/antisense_gffcompare_txIDs.txt", 
+              row.names = F, col.names = F, quote = F) # get the transcript IDs to use so you can grep later
+# these txIDs may have carriage returns and grepping won't work if they do! 
+# make sure to check for them
+```
+
+#Now lets filter for intronic RNAs
+```{r}
+intronic <- gffcomp %>%
+  dplyr::filter(class_code == "i" & num_exons > 1 & len >= 200) # get intronic RNAs
+# these intronic RNAs will be on both strands relative to the reference
+```
+
+#To further filter the intronic lncRNAs that are antisense intronic lncRNAs we need to pull in some more information i.e. our up-to-date genome annotation
+```{r}
+setwd("/path/to/final/merged/assembly")
+merged_anno <- read.table("all_merged.gtf", sep = "\t", header = F)
+# load in the stringtie merge annotation so that you can get the strand of the intronic RNA
+
+```
+
+#Clean up the annotation to make it easier to isolate transcript IDs
+```{r}
+merged_anno_clean <- merged_anno %>%
+  separate(col = V9, into = c("gene", "tx", "exon"),
+           sep = ";") %>%
+  dplyr::select(V7, tx) %>%
+  distinct() # separate the last column of the stringtie merge annotation 
+# to isolate the txIDs
+```
+
+```{r}
+# clean up the txID
+merged_anno_clean$tx <- gsub(' transcript_id ', '', merged_anno_clean$tx)
+```
+
+#Now add a column that denotes the strand of the intronic lncRNA
+```{r}
+intronic_with_strand <- intronic %>%
+  left_join(., merged_anno_clean,
+            by = c("qry_id" = "tx")) %>%
+  distinct() %>%
+  dplyr::rename(intronic_strand = V7) # join the strand to the intronic txIDs
+
+```
+
+#Now we need to figure out what strand the pcg is on
+```{r}
+# load in the reference GTF 
+ref_anno <- read.table("/path/to/your/reference/anntoation/your_species_genome_annotation.gtf", sep = "\t", header = F)
+```
+
+#lets clean up the reference annotation and extract the information that we really need
+```{r}
+ref_anno_clean <- ref_anno %>%
+  dplyr::filter(V3 == "transcript") %>%
+   separate(col = V9, into = c("gene", "tx", "exon", "other", "other2", "other3"),
+           sep = ";", extra = "merge") %>%
+  dplyr::select(V7, gene) # separate
+
+#clean up those transcript IDs
+ref_anno_clean$gene <- gsub('gene_id ', 'gene:', ref_anno_clean$gene )
+#cs_ref_anno_mod_clean$gene <- gsub('ID=', '', cs_ref_anno_mod_clean$gene )
+
+```
+
+# Now, join together reference transcript strand with assembled transcript
+```{r}
+intron2 <- intronic_with_strand %>%
+  left_join(., ref_anno_clean,
+            by = c("ref_gene_id" = "gene")) %>%
+  dplyr::rename(reference_strand = V7) %>%
+  distinct()
+
+```
+
+# filter for antisense intronic transcripts
+```{r}
+intron3 <- intron2 %>%
+  dplyr::filter(intronic_strand != reference_strand)
+
+```
+
+#Export those IDs, again watching out for carriage returns
+```{r}
+setwd("/desired/path/to/output/gffcompare_results")
+intron3 %>%
+  distinct(qry_id) %>%
+  write.table("antisense_intron_gffcompare_txIDs.txt",
+              quote = F, row.names = F, col.names = F)
+```
