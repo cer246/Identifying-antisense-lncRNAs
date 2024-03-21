@@ -2,7 +2,7 @@
 
 **Contact**: cer246@cornell.edu
 
-**Overivew**:Script is going to be interpreted/run in bash, below is pseudo-coded workflow for identifying antisense lncRNAs from RNA-seq data. This workflow is optimized for stranded short-read data and ONT long-read data.
+**Overview**:Script is going to be interpreted/run in bash, below is pseudo-coded workflow for identifying antisense lncRNAs from RNA-seq data. This workflow is optimized for stranded short-read data and ONT long-read data.
 
 #### **Table of Contents**
 
